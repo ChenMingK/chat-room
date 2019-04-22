@@ -1,5 +1,6 @@
 <template>
   <div class="container">
+    <!-- <img src="../../public/emoji/1.gif" style="width: 100px; height:100px;"> -->
     <div class="chatroom-wrapper">
       <div class="chatroom-banner-wrapper">
         <div class="chatroom-banner-welcome-wrapper">
@@ -26,7 +27,8 @@
                    @change="chooseColor"><!--color类型可让用户选择颜色-->
           </div>
           <div class="chatroom-controls-selects-emoji-wrapper">
-            <input type="button" value="emoji" title="emoji">
+            <input type="button" value="emoji" title="emoji"
+                   @click="showEmoji">
           </div>
           <div class="chatroom-controls-selects-image-wrapper">
             <label for="sendImage" class="imageLable">
@@ -53,9 +55,16 @@
     <div class="mask" v-if="!ifLogin">
       <div class="mask-messages-wrapper">
         <input class="mask-messages-inputUserName" type="text" v-model="username"
-               placeholder="请输入用户名">
+               placeholder="请输入用户名"
+               ref="usernameInput">
         <input class="mask-messages-confirmBtn" type="button" @click="confirmUserName"
                value="确认">
+      </div>
+    </div>
+    <div class="emoji-wrapper" v-show="ifChooseEmoji">
+      <div class="emoji-item-wrapper" v-for="n in emojiNumbers" :key="n"
+           @click="chooseEmoji(n)">
+        <img :src="generateEmojiSrc(n)" :title="n">
       </div>
     </div>
   </div>
@@ -64,39 +73,103 @@
 <script>
 // @ is an alias to /src
 export default {
-  data: function() {
+  data: function () {
     return {
       onlineNumbers: 0, // 在线人数
-      username: '老王',
-      ifLogin: true,
+      username: '',
+      ifLogin: false,
+      ifChooseEmoji: false,
       defaultContentColor: '#000', // 文字默认颜色，选择颜色后改变该值
       historyMessages: [
-        {
+        /* {
           username: 'user1',
           time: '22:22:22',
           content: 'Hello~',
           contentColor: '#000',
           ifImage: false
-        },
-        {
-          username: 'user2',
-          time: '22:22:23',
-          content: 'Hello~lo~',
-          contentColor: '#000',
-          ifImage: false
-        }
+        }, */
       ], // 一条消息由什么组成?
-      textareaContent: ''
+      textareaContent: '',
+      emojiNumbers: 30
     }
   },
+  sockets: {
+    connect: function () {
+      // console.log('socket connected')
+    },
+    customEmit: function (data) {
+      // console.log('this method was fired by the socket server. eg: io.emit("customEmit", data)')
+    },
+    // 收到服务器的'登录成功'事件
+    loginSuccess: function () {
+      // 去掉蒙版
+      this.ifLogin = true
+    },
+    // 用户名已存在
+    nickExisted: function() {
+      alert('用户名已存在')
+      this.username = ''
+      this.$refs.usernameInput.focus()
+    },
+    
+    // 收到'系统提示'事件，如其他用户登录、登出了
+    // socket.io把参数封装成一个数组了
+    newsSystem: function (data) {
+      // 1.显示某用户登录、登出的信息 2.在线人数增加/减少
+      const [user, totalUsers, type] = data // 解构赋值
+      this.onlineNumbers = totalUsers
+      if (type === 'login') {
+        this.displayMessage('system', this.transferTime(), `${user}加入了聊天室`, 'red')
+      } else if (type === 'disconnet') {
+        this.displayMessage('system', this.transferTime(), `${user}离开了聊天室`, 'red')
+      }   
+    },
+    // 收到'发送消息'事件，如其他用户发送了文字
+    newsMsg: function (data) {
+      const [user, msg, color] = data
+      this.displayMessage(user, this.transferTime(), msg, color)
+    },
+    // 收到'发送图片'事件 
+    newsImg: function (data) {
+      const [user, imgData] = data
+      this.displayMessage(user, this.transferTime(), `<img src="${imgData}" style="width:100%">`, '#000', true)
+    } 
+  },
   methods: {
+    /*
+    clickButton: function (data) {
+            // $socket is socket.io-client instance
+            this.$socket.emit('emit_method', data)
+    }, */
+    // 将添加消息整合成一个方法
+    displayMessage(username, time, content, contentColor, ifImage = false) {
+      this.historyMessages.push({
+        username: username,
+        time: time,
+        content: content,
+        contentColor: contentColor,
+        ifImage: ifImage
+      })
+    },
+    chooseEmoji(index) {
+      console.log(index)
+      this.ifChooseEmoji = !this.ifChooseEmoji
+      this.textareaContent = this.textareaContent + `[emoji:${index}]`
+    },
+    generateEmojiSrc(index) {
+      return require(`../../public/emoji/${index}.gif`)
+    },
     // 清空内容
     clearMessages() {
       this.historyMessages = []
     },
+    // 点击emoji时触发,需要emoji用v-show
+    showEmoji(e) {
+      this.ifChooseEmoji = !this.ifChooseEmoji
+    },
     // 颜色?获取?加到文字上
     chooseColor(e) {
-      console.log(e.target.value) // 颜色#xxxxxx
+      // console.log(e.target.value) // 颜色#xxxxxx
       this.defaultContentColor = e.target.value
     },
     // 选择图片时触发
@@ -122,11 +195,14 @@ export default {
           content: `<img src="${imageData}" style="width:100%">`, // 本来想把style写在css里的发现无法选择到img
           ifImage: true
         })
+        _this.$socket.emit('postImg', imageData)
       }
     },
     // 确认用户名
     confirmUserName() {
-      this.ifLogin = true
+      // this.ifLogin = true
+      // socket:用户名&登录
+      this.$socket.emit('login', this.username)
     },
     // 发送消息
     sendMessage() {
@@ -136,6 +212,8 @@ export default {
         content: this.textareaContent,
         contentColor: this.defaultContentColor
       })
+      // 需要把消息传递给服务器,参数:文字内容,文字颜色 ---不需要用户名
+      this.$socket.emit('postMsg', this.textareaContent, this.defaultContentColor)
       this.textareaContent = ''
     },
     transferTime() {
@@ -325,7 +403,27 @@ export default {
         }
       }
     }
-
+    .emoji-wrapper {
+      position: absolute;
+      width: 250px;
+      bottom: 128px;
+      left: 120px;
+      display: flex;
+      flex-wrap: wrap;
+      z-index: 100;
+      .emoji-item-wrapper {
+        width: 30px;
+        height: 30px;
+        @include center;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        margin-top: -1px;
+        margin-left: -1px;
+        img {
+          width: 100%;
+        }
+      }
+    }
   }
   
 </style>
