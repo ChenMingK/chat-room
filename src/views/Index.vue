@@ -1,6 +1,5 @@
 <template>
   <div class="container">
-    <!-- <img src="../../public/emoji/1.gif" style="width: 100px; height:100px;"> -->
     <div class="chatroom-wrapper">
       <div class="chatroom-banner-wrapper">
         <div class="chatroom-banner-welcome-wrapper">
@@ -17,7 +16,8 @@
           <div class="img-wrapper" v-if="item.ifImage" v-html="item.content">{{item.content}}</div>
           <span class="chatroom-messages-content"
                 :style="{color: item.contentColor}"
-                v-else>{{item.content}}</span>
+                v-else
+                v-html="item.content">{{item.content}}</span>
         </div>
       </div><!--消息显示部分-->
       <div class="chatroom-controls-wrapper">
@@ -56,7 +56,8 @@
       <div class="mask-messages-wrapper">
         <input class="mask-messages-inputUserName" type="text" v-model="username"
                placeholder="请输入用户名"
-               ref="usernameInput">
+               ref="usernameInput"
+               @keydown.enter="confirmUserName">
         <input class="mask-messages-confirmBtn" type="button" @click="confirmUserName"
                value="确认">
       </div>
@@ -88,7 +89,7 @@ export default {
           contentColor: '#000',
           ifImage: false
         }, */
-      ], // 一条消息由什么组成?
+      ],
       textareaContent: '',
       emojiNumbers: 30
     }
@@ -96,9 +97,6 @@ export default {
   sockets: {
     connect: function () {
       // console.log('socket connected')
-    },
-    customEmit: function (data) {
-      // console.log('this method was fired by the socket server. eg: io.emit("customEmit", data)')
     },
     // 收到服务器的'登录成功'事件
     loginSuccess: function () {
@@ -111,7 +109,6 @@ export default {
       this.username = ''
       this.$refs.usernameInput.focus()
     },
-    
     // 收到'系统提示'事件，如其他用户登录、登出了
     // socket.io把参数封装成一个数组了
     newsSystem: function (data) {
@@ -120,7 +117,7 @@ export default {
       this.onlineNumbers = totalUsers
       if (type === 'login') {
         this.displayMessage('system', this.transferTime(), `${user}加入了聊天室`, 'red')
-      } else if (type === 'disconnet') {
+      } else if (type === 'disconnect') {
         this.displayMessage('system', this.transferTime(), `${user}离开了聊天室`, 'red')
       }   
     },
@@ -132,6 +129,7 @@ export default {
     // 收到'发送图片'事件 
     newsImg: function (data) {
       const [user, imgData] = data
+      // 可以直接用src加载blob格式的数据显示图像
       this.displayMessage(user, this.transferTime(), `<img src="${imgData}" style="width:100%">`, '#000', true)
     } 
   },
@@ -143,16 +141,41 @@ export default {
     }, */
     // 将添加消息整合成一个方法
     displayMessage(username, time, content, contentColor, ifImage = false) {
-      this.historyMessages.push({
-        username: username,
-        time: time,
-        content: content,
-        contentColor: contentColor,
-        ifImage: ifImage
-      })
+      // 非图片和图片分开处理
+      if (ifImage === false) {
+        let reg = /emoji/g
+        let textareaContent = content
+        let newContent
+        // 含有emoji将emoji文字转化为图片
+        if (reg.test(textareaContent)) {
+          newContent = textareaContent.replace(/\[emoji:(\d+)\]/g, `<img src="/emoji/$1.gif" style="width:30px">`)
+          this.historyMessages.push({
+            username: username,
+            time: time,
+            content: newContent,
+            contentColor: contentColor,
+            ifImage: ifImage
+          })
+        } else { // 不含emoji直接显示内容
+          this.historyMessages.push({
+            username: username,
+            time: time,
+            content: content,
+            contentColor: contentColor,
+            ifImage: ifImage
+          })
+        }
+      } else {
+        this.historyMessages.push({
+          username: username,
+          time: time,
+          content: content,
+          contentColor: contentColor,
+          ifImage: ifImage
+        })
+      }  
     },
     chooseEmoji(index) {
-      console.log(index)
       this.ifChooseEmoji = !this.ifChooseEmoji
       this.textareaContent = this.textareaContent + `[emoji:${index}]`
     },
@@ -169,13 +192,12 @@ export default {
     },
     // 颜色?获取?加到文字上
     chooseColor(e) {
-      // console.log(e.target.value) // 颜色#xxxxxx
+      // console.log(e.target.value) 颜色#xxxxxx
       this.defaultContentColor = e.target.value
     },
     // 选择图片时触发
     chooseImage(e) {
       // 检查是否有文件被选中
-      // console.log(e.target.files[0])
       let _this = this
       let file = e.target.files[0]
       let reader = new FileReader()
@@ -191,7 +213,7 @@ export default {
         let imageData = reader.result
         _this.historyMessages.push({
           username: _this.username,
-          time: new Date().toTimeString().substr(0, 8), // what?
+          time: new Date().toTimeString().substr(0, 8),
           content: `<img src="${imageData}" style="width:100%">`, // 本来想把style写在css里的发现无法选择到img
           ifImage: true
         })
@@ -200,31 +222,26 @@ export default {
     },
     // 确认用户名
     confirmUserName() {
-      // this.ifLogin = true
       // socket:用户名&登录
       this.$socket.emit('login', this.username)
     },
     // 发送消息
     sendMessage() {
-      this.historyMessages.push({
-        username: this.username,
-        time: this.transferTime(),
-        content: this.textareaContent,
-        contentColor: this.defaultContentColor
-      })
+      this.displayMessage(this.username, this.transferTime(), this.textareaContent, this.defaultContentColor)
       // 需要把消息传递给服务器,参数:文字内容,文字颜色 ---不需要用户名
       this.$socket.emit('postMsg', this.textareaContent, this.defaultContentColor)
-      this.textareaContent = ''
+      this.textareaContent = '' 
     },
     transferTime() {
-      let date = new Date()
+      /* let date = new Date()
       let hours = '' + date.getHours()
       hours = hours.length > 1 ? hours : '0' + hours
       let minutes = '' + date.getMinutes() // change to String
       minutes = minutes.length > 1 ? minutes : '0' + minutes
       let seconds = '' + date.getSeconds()
       seconds = seconds.length > 1 ? seconds : '0' + seconds
-      return hours + ':' + minutes + ':' + seconds
+      return hours + ':' + minutes + ':' + seconds */
+      return new Date().toTimeString().substr(0, 8)
     }
   }
 }
@@ -406,8 +423,8 @@ export default {
     .emoji-wrapper {
       position: absolute;
       width: 250px;
-      bottom: 128px;
-      left: 120px;
+      bottom: 29%;
+      left:37%;
       display: flex;
       flex-wrap: wrap;
       z-index: 100;
