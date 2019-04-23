@@ -7,7 +7,7 @@ import VueSocketIO from 'vue-socket.io'
 Vue.config.productionTip = false
 Vue.use(new VueSocketIO({
   debug: false,
-  connection: 'localhost:3001', // options object is Optional
+  connection: 'http://47.100.203.67:3301', // options object is Optional
   vuex: {
       store,
       actionPrefix: 'SOCKET_', // what?
