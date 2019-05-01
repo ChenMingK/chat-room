@@ -17,6 +17,7 @@ npm run build
 
 
 ## Questions record
+- [3.如何发送图片?](#3.如何发送图片?)
 ### 1.input file="type"更改默认样式
 <img src="https://github.com/ChenMingK/chat-room/blob/master/QuestionImgs/1.png?raw=true" width=250>
 
