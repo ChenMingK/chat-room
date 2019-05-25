@@ -17,7 +17,7 @@ npm run build
 
 
 ## Questions record
-### 1.input file="type"更改默认样式
+### 1.input type="file"更改默认样式
 <img src="https://github.com/ChenMingK/chat-room/blob/master/QuestionImgs/1.png?raw=true" width=250>
 
 可以看到input type=”file”会自动显示“未选择任何文件”字样，我们需要把这个去掉
